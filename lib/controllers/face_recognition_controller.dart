@@ -15,6 +15,7 @@ final options = FaceDetectorOptions(
 class FaceRecognitionController extends GetxController {
   final faceDetector = FaceDetector(options: options);
   static FaceRecognitionController find = Get.put(FaceRecognitionController());
+  final RxList<Rect> boundingBoxes = <Rect>[].obs;
 
   @override
   void dispose() {
@@ -23,29 +24,44 @@ class FaceRecognitionController extends GetxController {
     super.dispose();
   }
 
-  void processImage(InputImage inputImage) async {
+  Future<void> processImage(InputImage inputImage) async {
+
     final faces = await faceDetector.processImage(inputImage);
+
+    boundingBoxes.clear();
+
+    dev.log("Faces: $faces");
 
     for (Face face in faces) {
       final Rect boundingBox = face.boundingBox;
+
+
+      dev.log('Bounding Box: $boundingBox');
+
+      boundingBoxes.add(face.boundingBox);
 
       final double? rotX = face.headEulerAngleX;
       final double? rotY = face.headEulerAngleY;
       final double? rotZ = face.headEulerAngleZ;
 
       dev.log('rotX: $rotX, rotY: $rotY, rotZ: $rotZ');
-      final FaceLandmark? leftEar = face.landmarks[FaceLandmarkType.leftEar];
-      if (leftEar != null) {
-        final Point<int> leftEarPos = leftEar.position;
-      }
 
       if (face.smilingProbability != null) {
         final double? smileProb = face.smilingProbability;
+        dev.log('Smile Probability: $smileProb');
+      }
+
+      if (face.leftEyeOpenProbability != null) {
+        final double? leftEyeOpenProb = face.leftEyeOpenProbability;
+        dev.log('Left Eye Open Probability: $leftEyeOpenProb');
       }
 
       if (face.trackingId != null) {
         final int? id = face.trackingId;
+        dev.log('Tracking ID: $id');
       }
     }
+
+    update();
   }
 }

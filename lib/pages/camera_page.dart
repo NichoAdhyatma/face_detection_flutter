@@ -1,51 +1,79 @@
-import 'dart:developer';
-import 'dart:io';
-
 import 'package:camera/camera.dart';
-import 'package:face_detection/controllers/base_controller.dart';
+import 'package:face_detection/widgets/face_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../main.dart';
+import '../controllers/base_controller.dart';
 
 class CameraWidget extends GetView<BaseController> {
   const CameraWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return GetBuilder<BaseController>(builder: (_) {
+    final size = MediaQuery.of(context).size;
+
+    return GetBuilder<BaseController>(builder: (controller) {
       if (!controller.cameraController.value.isInitialized) {
         return const Center(child: CircularProgressIndicator());
       }
 
+      final isPreviewPaused = controller.cameraController.value.isPreviewPaused;
+
       return Column(
         children: [
+          // Camera preview or paused message
           Expanded(
-            child: !controller.cameraController.value.isPreviewPaused
-                ? controller.cameraController.buildPreview()
-                : const Center(
-                    child: Text("Video Paused"),
+            child: isPreviewPaused
+                ? const Center(
+                    child: Text(
+                      "Video Paused",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                : Stack(
+              fit: StackFit.expand,
+                    children: [
+                      CameraPreview(controller.cameraController),
+                      const FaceOverlayWidget(),
+                    ],
                   ),
           ),
-          Row(
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  controller.switchLiveCamera();
-                },
-                child: const Text("Switch"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  controller.cameraController.value.isPreviewPaused
-                      ? controller.startPreview()
-                      : controller.stopLiveFeed();
-                },
-                child: controller.cameraController.value.isPreviewPaused
-                    ? Text("Start")
-                    : Text("Stop"),
-              ),
-            ],
+          // Control buttons
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: controller.enrollFace,
+                    child: const Text('Enroll Face'),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: controller.verifyFace,
+                    child: const Text('Verify Face'),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: controller.switchLiveCamera,
+                    icon: const Icon(Icons.switch_camera),
+                    label: const Text("Switch"),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isPreviewPaused
+                        ? controller.startPreview
+                        : controller.stopLiveFeed,
+                    icon: Icon(isPreviewPaused ? Icons.play_arrow : Icons.pause),
+                    label: Text(isPreviewPaused ? "Start" : "Stop"),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       );
