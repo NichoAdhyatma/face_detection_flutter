@@ -1,11 +1,8 @@
 import 'dart:io';
 import 'dart:developer' as dev;
-import 'dart:math';
-
 import 'package:camera/camera.dart';
 import 'package:face_detection/controllers/face_recognition_controller.dart';
 import 'package:face_detection/main.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
@@ -14,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 var inputImageFormat =
     Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888;
 
-class BaseController extends GetxController {
+class CameraSetupController extends GetxController {
   CameraController cameraController =
       CameraController(cameras.first, ResolutionPreset.high);
   FaceRecognitionController faceRecognitionController =
@@ -29,8 +26,12 @@ class BaseController extends GetxController {
 
   bool isProcessing = false;
 
+  bool? isMatchFace;
+
   File? enrolledFaceImage;
   Face? enrolledFace;
+
+  File? verificationImage;
 
   // Threshold untuk menentukan kecocokan wajah
   final double SIMILARITY_THRESHOLD = 0.7;
@@ -152,15 +153,11 @@ class BaseController extends GetxController {
     Get.snackbar("Start", "Start to enroll face");
 
     try {
-      // Capture gambar
       final XFile image = await cameraController.takePicture();
 
-      // Simpan gambar
       final directory = await getApplicationDocumentsDirectory();
-      final savedImage =
-          await File(image.path).copy('${directory.path}/${DateTime.now()}.png');
-
-      // Deteksi wajah pada gambar
+      final savedImage = await File(image.path)
+          .copy('${directory.path}/${DateTime.now()}.png');
       final inputImage = InputImage.fromFilePath(savedImage.path);
       final faces =
           await faceRecognitionController.faceDetector.processImage(inputImage);
@@ -176,23 +173,10 @@ class BaseController extends GetxController {
         return;
       }
 
-      // Simpan wajah yang terdeteksi
       enrolledFaceImage = savedImage;
       enrolledFace = faces.first;
 
       dev.log('Enrolled Face: $enrolledFace, dir: $enrolledFaceImage');
-      Get.dialog(
-        AlertDialog(
-          title: const Text('Success'),
-          content: const Text('Face enrolled successfully!'),
-          actions: [
-            TextButton(
-              onPressed: () => Get.back(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
     } catch (e) {
       Get.snackbar('Error', 'Failed to enroll face: $e');
     } finally {
@@ -208,9 +192,9 @@ class BaseController extends GetxController {
 
     try {
       // Capture gambar untuk verifikasi
-      final image = await cameraController.takePicture();
-      final inputImage = InputImage.fromFilePath(image.path);
-      final faces =
+      final XFile image = await cameraController.takePicture();
+      final InputImage inputImage = InputImage.fromFilePath(image.path);
+      final List<Face> faces =
           await faceRecognitionController.faceDetector.processImage(inputImage);
 
       if (faces.isEmpty) {
@@ -224,10 +208,22 @@ class BaseController extends GetxController {
         return false;
       }
 
+      final directory = await getApplicationDocumentsDirectory();
+
       final detectedFace = faces.first;
+      verificationImage = await File(image.path)
+          .copy('${directory.path}/${DateTime.now()}.png');
 
       // Verifikasi wajah berdasarkan berbagai faktor
-      final bool isMatch = await _compareFaces(enrolledFace!, detectedFace);
+      if (enrolledFace == null) {
+        Get.snackbar('Error', 'Please enroll face first');
+        return false;
+      }
+
+      final bool isMatch = await faceRecognitionController.compareFaces(
+        enrolledFace!,
+        detectedFace,
+      );
 
       if (isMatch) {
         dev.log('Face verification successful!');
@@ -237,6 +233,10 @@ class BaseController extends GetxController {
         Get.snackbar('Error', 'Face verification failed. Please try again.');
       }
 
+      update();
+
+      isMatchFace = isMatch;
+
       return isMatch;
     } catch (e) {
       Get.snackbar('Error', 'Failed to verify face: $e');
@@ -245,72 +245,5 @@ class BaseController extends GetxController {
       isProcessing = false;
       update();
     }
-  }
-
-  Future<bool> _compareFaces(Face enrolledFace, Face detectedFace) async {
-    // Hitung similarity score berdasarkan berbagai faktor
-    double similarityScore = 0.0;
-
-    // 1. Bandingkan landmark wajah
-    if (enrolledFace.landmarks.isNotEmpty &&
-        detectedFace.landmarks.isNotEmpty) {
-      similarityScore += _compareLandmarks(enrolledFace, detectedFace) * 0.4;
-    }
-
-    // 2. Bandingkan rotasi wajah
-    similarityScore += _compareRotation(enrolledFace, detectedFace) * 0.2;
-
-    // 3. Bandingkan ukuran wajah relatif
-    similarityScore += _compareSize(enrolledFace, detectedFace) * 0.2;
-
-    // 4. Bandingkan ekspresi wajah (jika tersedia)
-    if (enrolledFace.smilingProbability != null &&
-        detectedFace.smilingProbability != null) {
-      similarityScore += (1.0 -
-              (enrolledFace.smilingProbability! -
-                      detectedFace.smilingProbability!)
-                  .abs()) *
-          0.2;
-    }
-
-    return similarityScore >= SIMILARITY_THRESHOLD;
-  }
-
-  double _compareLandmarks(Face face1, Face face2) {
-    var differences = 0.0;
-    var totalPoints = 0;
-
-    face1.landmarks.forEach((type, point1) {
-      if (face2.landmarks.containsKey(type)) {
-        final point2 = face2.landmarks[type]!;
-        differences += sqrt(
-          pow(point1!.position.x - point2.position.x, 2) +
-              pow(
-                point1.position.y - point2.position.y,
-                2,
-              ),
-        );
-        totalPoints++;
-      }
-    });
-
-    if (totalPoints == 0) return 0.0;
-    return 1.0 - (differences / totalPoints / 100); // Normalisasi
-  }
-
-  double _compareRotation(Face face1, Face face2) {
-    final rotationDiff =
-        (face1.headEulerAngleY! - face2.headEulerAngleY!.toInt()).abs();
-
-    dev.log('Rotation Diff: $rotationDiff');
-
-    return 1.0 - (rotationDiff / 360.0); // Normalisasi ke 0-1
-  }
-
-  double _compareSize(Face face1, Face face2) {
-    // Bandingkan rasio ukuran wajah
-    final ratio1 = face1.boundingBox.width / face1.boundingBox.height;
-    final ratio2 = face2.boundingBox.width / face2.boundingBox.height;
-    return 1.0 - (ratio1 - ratio2).abs();
   }
 }

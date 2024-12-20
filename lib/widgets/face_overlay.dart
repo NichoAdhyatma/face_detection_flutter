@@ -1,4 +1,4 @@
-import 'package:face_detection/controllers/base_controller.dart';
+import 'package:face_detection/controllers/camera_setup_controller.dart';
 import 'package:face_detection/controllers/face_recognition_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -61,7 +61,7 @@ class FacePainter extends CustomPainter {
   }
 }
 
-class FaceOverlayWidget extends GetView<BaseController> {
+class FaceOverlayWidget extends GetView<CameraSetupController> {
   const FaceOverlayWidget({super.key});
 
   @override

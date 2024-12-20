@@ -1,5 +1,5 @@
 import 'package:camera/camera.dart';
-import 'package:face_detection/controllers/base_controller.dart';
+import 'package:face_detection/controllers/camera_setup_controller.dart';
 import 'package:face_detection/controllers/face_recognition_controller.dart';
 import 'package:face_detection/pages/home_page.dart';
 import 'package:flutter/material.dart';
@@ -12,10 +12,15 @@ void main() async {
 
   cameras = await availableCameras();
 
-  Get.put(BaseController());
+  Get.put(
+    CameraSetupController(),
+    permanent: true,
+  );
 
-  Get.put(FaceRecognitionController());
-
+  Get.put(
+    FaceRecognitionController(),
+    permanent: true,
+  );
 
   runApp(const MyApp());
 }
@@ -35,5 +40,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-
